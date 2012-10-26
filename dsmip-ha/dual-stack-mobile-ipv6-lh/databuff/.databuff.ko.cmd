@@ -1,0 +1,1 @@
+cmd_/root/dual-stack-mobile-ipv6-lh/databuff/databuff.ko := ld -r -m elf_i386  --build-id -o /root/dual-stack-mobile-ipv6-lh/databuff/databuff.ko /root/dual-stack-mobile-ipv6-lh/databuff/databuff.o /root/dual-stack-mobile-ipv6-lh/databuff/databuff.mod.o

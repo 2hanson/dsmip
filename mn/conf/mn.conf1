@@ -1,0 +1,10 @@
+#comments should begin with '#'
+#format:
+#ADDRESS_TYPE  ADDRESS
+#HOAV6: MN's ipv6 Home Address
+#HAV6:  HA's ipv6 address
+#default HOAV4-SUBNET 255.255.255.0
+HOAV6 3ffe:501:ffff:100:215:58ff:fe2a:82c
+HOAV4 192.168.0.1
+HAV6  3ffe:501:ffff:100:20c:29ff:fe5d:e29c
+HAV4  10.21.5.74

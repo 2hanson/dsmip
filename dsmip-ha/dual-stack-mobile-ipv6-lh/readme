@@ -1,0 +1,10 @@
+2011.11.30
+It's normally OK for final check.(using ha.c.11.30.2.good)
+
+2012.03.29
+fix the bug for
+	1.Change "goto resock" intead of "exit()" to avoid ha's terminating.
+	2.Make the PASSTIME_USEC larger to 10s to avoid nat info's missing.
+
+
+

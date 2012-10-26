@@ -1,0 +1,6 @@
+#MN's_ipv6_HOA[space]MN's_IPv4_HOA
+
+#COMMENTS SHOULD START WITH '#'
+
+3ffe:501:ffff:100::1 192.168.0.1
+3ffe:501:ffff:100:20c:29ff:fe5d:e29c 192.168.0.1

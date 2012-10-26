@@ -1,0 +1,1 @@
+cmd_/home/syl/yanshi/dsmip-ha/dual-stack-mobile-ipv6-lh/tnls/ip6tnl/ip6_tunnel.ko := ld -r -m elf_i386  --build-id -o /home/syl/yanshi/dsmip-ha/dual-stack-mobile-ipv6-lh/tnls/ip6tnl/ip6_tunnel.ko /home/syl/yanshi/dsmip-ha/dual-stack-mobile-ipv6-lh/tnls/ip6tnl/ip6_tunnel.o /home/syl/yanshi/dsmip-ha/dual-stack-mobile-ipv6-lh/tnls/ip6tnl/ip6_tunnel.mod.o

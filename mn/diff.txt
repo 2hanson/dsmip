@@ -1,0 +1,812 @@
+--- ../dual-stack-mobile-ipv6-lh-1021/mn.c	2010-10-26 23:01:17.953146786 +0800
++++ mn.c	2011-11-02 11:43:13.539552493 +0800
+@@ -19,7 +19,20 @@
+      neworks, to avoid duplicate link up and link down made by kernel.
+   WARNING: 
+     1. There is still problem in sending the first BU after handoff.
+-     BUs cannot be sent immediately after handoff!
++     BUs cannot be sent immediately after handoff!  
++  4. need waitpid to release the zombies
++  
++  NOV. 1 2010
++  fixed the bug to remoev zombies
++  
++  NOV. 17 2010
++  fixed the bug for which MN cannot handoff to WLAN while MN is communicating on GPRS interface 
++  and wlan interface becomes OK
++  
++  NOV. 30 2010
++  1. added some mechanisms(ipfix, ctrl_fix, witten by syl)
++     to imform external control procedures to update routes while handoff
++  2. added command messages to control whether to use auto-handoff or not
+ 
+ */
+          
+@@ -36,13 +49,15 @@
+ #include <arpa/inet.h>
+ #include <sys/socket.h>
+ #include <sys/time.h>
+-
++#include <sys/wait.h>
+ #include "udpencap.h"
+ 
+ #define MDBG dbg
+ #define pthread_dbg dbg
++int skip_ctrl_fd=0;//a:syl
+ int mh_sock=0;
+ int consecutive_bu = 0;
++#define EXTERNAL_CTRL 1
+ //--------------------------------------
+ int wlan_ifindex = 0;
+ static struct in6_addr old_rtaddr; 
+@@ -120,32 +135,25 @@
+   char buf[1024];
+   pid_t pid;
+   pipe( filedes );
+-  int oldstdout=dup(STDOUT_FILENO);
+   if((pid=fork())>0){
+-    
++    system("ip -6 route");
++    fprintf(stderr,"--------------------------------\n");
+     close(filedes[1]);
+     int n=read(filedes[0],buf,1024);
+-	close(filedes[0]);//a:syl
+-	dup2(oldstdout,STDOUT_FILENO);
+-	close(oldstdout);
+-
+     fprintf(stderr,"%d bytes read from filedes[0]\n",n);
+     buf[n]=0;
++    fprintf(stderr,"%s\n",buf);
+     char route_entry[2][100];
+     int nid=0;
+     char *pdefault = strstr(buf,"default");
+-	//a:syl for test
+-	fprintf(stderr,"The real in parrent is:\n");
+-	system("ip -6 route");
+-	fprintf(stderr,"\n");
+-
+-	fprintf(stderr,"\nthe buf is:\n%s\n",buf);
++    
+     while(pdefault){
+       //default via fe80::214:78ff:fe86:7559 dev wlan0  proto kernel  metric 1024 
+       //entry one
+       pdefault=strstr(pdefault,"via")+4;
+-      char * q = strstr(pdefault,"dev")-1;
+-      *q=0;
++      //char * q = strstr(pdefault,"dev")-1;
++      char * q = strstr(pdefault,"proto")-1;
++	  *q=0;
+       strcpy(route_entry[nid],pdefault);
+       pdefault=strstr(q+1,"default");
+       fprintf(stderr,"route[%d]: %s\n",nid,route_entry[nid]);
+@@ -171,17 +179,11 @@
+     
+   }
+   else{
+-    //a:syl for test
+-	//fprintf(stderr,"The real in child is:\n");
+-	//system("ip -6 route");
+-	//fprintf(stderr,"\n");
+-
+-	close(filedes[0]);//close unused read fd
++    close(filedes[0]);//close unused read fd
+     dup2(filedes[1],STDOUT_FILENO);
+-	close(filedes[1]);//a:syl
+-    close(oldstdout);//a:syl
+-	execl("/system/bin/ip","ip","-6","route");
+-    return 0;
++    //execl("/system/bin/ip","ip","-6","route");
++    execl("/system/bin/ip","ip","-6","route","show","dev","wlan0");//a:syl
++	return 0;
+   }
+   //fprintf(stderr,"I am sleeping for 3 seconds ...\n");
+   //sleep(3);
+@@ -369,8 +371,8 @@
+   {
+     struct in_addr inaddr_any; 
+     inaddr_any.s_addr = 0;
+-    /*
+-    fprintf(stderr,"do handoff called coav6 = %x:%x:%x:%x:%x:%x:%x:%x, coav4 = %d.%d.%d.%d, ifindex = %d\n",
++    
++    /*fprintf(stderr,"do handoff called coav6 = %x:%x:%x:%x:%x:%x:%x:%x, coav4 = %d.%d.%d.%d, ifindex = %d\n",
+ 	    NIP6ADDR(coav6?coav6:&in6addr_any),
+ 	    NIP4ADDR(coav4?coav4:&inaddr_any),
+ 	    ifindex);
+@@ -400,12 +402,16 @@
+   //fprintf(stderr,"----------------here %d\n", __LINE__);
+   if(type==(uint8_t)-1&&
+      (current_coa_type==(uint8_t)-1||current_coa_type==0)){
+-    if(memcmp(&current_coav6,coav6,sizeof(struct in6_addr))==0)
++    if(memcmp(&current_coav6,coav6,sizeof(struct in6_addr))==0){
++      consecutive_bu = 0;
+       return 0;//coa not change
++    }
+   }
+   if((type==1||type==2)&&(current_coa_type==1||current_coa_type==2)){
+-    if(memcmp(&current_coav4,coav4,sizeof(struct in_addr))==0)
++    if(memcmp(&current_coav4,coav4,sizeof(struct in_addr))==0){
++      consecutive_bu = 0;
+       return 0;//coa not change, do nothing
++    }
+   }
+   //fprintf(stderr,"----------------here %d\n", __LINE__);
+   current_ifindex = ifindex;//update ifindex that is current used for communication
+@@ -436,7 +442,7 @@
+     //ipv6 coa
+     //first check if go home
+     if(memcmp(coav6,&hoav6,sizeof(struct in6_addr))==0){
+-      //go home
++      //go home 
+       //fprintf(stderr,"addr4_add %d\n",__LINE__);
+       fprintf(stderr,"handoff to home\n");
+       if(current_coa_type==(uint8_t)-1){
+@@ -451,7 +457,9 @@
+ 		  &in6addr_any,0,//src                            
+ 		  &in6addr_any,0,0);
+ 	mn_dstopt_policies_del(current_coav6);	
++	pctime();//a:syl
+ 	tunnel66_del(tnl66_ifindex);
++	pctime();
+ 	tnl66_ifindex=0;
+ 	fprintf(stderr,"rule_del %d\n",__LINE__);
+ 	rule_del(NULL, MN_ROUTE_DEFAULT,
+@@ -484,8 +492,11 @@
+ 		  IP6_RT_PRIO_MIP6_FWD,//metrics                  
+ 		  &hoav6,128,//src                            
+ 		  &in6addr_any,0,0);
++	pctime();//a:syl
+ 	tunnel64_del(tnl64_ifindex);
++	pctime();//a:syl
+ 	tunnel44_del(tnl44_ifindex);
++	pctime();//a:syl
+ 	tnl64_ifindex = tnl44_ifindex = 0;
+       }
+     
+@@ -497,12 +508,14 @@
+       //memset(&current_coav6,0,sizeof(struct in6_addr));
+       //memset(&current_coav4,0,sizeof(struct in_addr));
+       mod_ipv6_gateway();
+-      int k;
+-      for(k=0;consecutive_bu&&k<10;++k)
++      int k = consecutive_bu?10:1;
++      for(;k>0;--k){
+ 	sendbu(&hav6,
+ 	       &hoav6,
+ 	       coav6,
+ 	       __BU_SEQ__++);
++	usleep(10*1000);
++	}
+       consecutive_bu = 0;
+       //we need to add ipv4 routes and home address on the interface
+     }//at home
+@@ -546,7 +559,9 @@
+ 		  &in6addr_any,0,//src                            
+ 		  &in6addr_any,0,0);
+ 	mn_dstopt_policies_del(current_coav6);	
++	pctime();//a:syl
+ 	tunnel66_del(tnl66_ifindex);
++	pctime();
+ 	tnl66_ifindex=0;
+ 	pctime();
+ 	fprintf(stderr,"rule_del %d\n",__LINE__);
+@@ -564,16 +579,22 @@
+ 	  stop_udp_encap(&hoav6,&hoav4,
+ 			 &current_coav4,&hav4,666,666,UDP_ENCAP_PRIO);
+ 	}
+-	route4_del(tnl44_ifindex, ROUTE_MOBILE,
++	int _ret;
++	_ret=route4_del(tnl44_ifindex, ROUTE_MOBILE,
+ 		   &inaddr_any,0, //from src                      
+ 		   &inaddr_any,0, //to                     
+ 		   0);
+-	route_del(tnl64_ifindex, ROUTE_MOBILE,
++	fprintf(stderr,"route4_del ret is %d\n",_ret);
++	_ret=route_del(tnl64_ifindex, ROUTE_MOBILE,
+ 		  IP6_RT_PRIO_MIP6_FWD,//metrics                  
+ 		  &in6addr_any,0,//src                            
+ 		  &in6addr_any,0,0);
++	fprintf(stderr,"route_del ret is %d\n",_ret);
++	pctime();//a:syl
+ 	tunnel64_del(tnl64_ifindex);
++	pctime();//a:syl
+ 	tunnel44_del(tnl44_ifindex);
++	pctime();//a:syl
+ 	tnl64_ifindex = tnl44_ifindex = 0;
+ 	rule4_del(NULL, MN_MOBILE_ROUTE_TABLE,
+ 		  MN_MOBILE_RULE_HIGH_PRIO, RTN_UNICAST,
+@@ -618,12 +639,14 @@
+       //if(current_coa_type == (uint8_t)(-1))
+       mod_ipv6_gateway();
+       current_coa_type = -1;
+-      int k;
+-      for(k=0;consecutive_bu&&k<10;++k)
+-      sendbu(&hav6,
++      int k = consecutive_bu?10:1;
++      for(;k>0;--k){
++	sendbu(&hav6,
+ 	     &hoav6,
+ 	     coav6,
+-	     __BU_SEQ__++);    
++	     __BU_SEQ__++);
++	usleep(10*1000);
++	}    
+       consecutive_bu = 0;
+     }
+   }//coa is ipv6
+@@ -683,8 +706,10 @@
+       if(current_coa_type==1)
+ 	stop_udp_encap(&hoav6,&hoav4,
+ 		       &current_coav4,&hav4,666,666,UDP_ENCAP_PRIO);
++	pctime();//a:syl
+ 	start_udp_encap(&hoav6,&hoav4,coav4,&hav4,666,666,UDP_ENCAP_PRIO);
+-    }
++    pctime();
++	}
+     //fprintf(stderr,"----------------here %d\n", __LINE__);
+     //fprintf(stderr,"rule4_add %d\n",__LINE__);    
+     rule4_add(NULL, ROUTE_MOBILE_TMP,
+@@ -708,8 +733,10 @@
+ 		&in6addr_any,0,//src                            
+ 		&in6addr_any,0,0);
+       mn_dstopt_policies_del(current_coav6);	
+-      tunnel66_del(tnl66_ifindex);
+-      tnl66_ifindex=0;
++      pctime();//a:syl
++	  tunnel66_del(tnl66_ifindex);
++      pctime();
++	  tnl66_ifindex=0;
+       fprintf(stderr,"rule_del %d\n",__LINE__);
+       rule_del(NULL, MN_ROUTE_DEFAULT,
+ 	       MN_MOBILE_RULE_HIGH_PRIO, 
+@@ -728,9 +755,13 @@
+ 		IP6_RT_PRIO_MIP6_FWD,//metrics                  
+ 		&in6addr_any,0,//src                            
+ 		&in6addr_any,0,0);
+-      tunnel64_del(tnl64_ifindex);
+-      tunnel44_del(tnl44_ifindex);
+-      tnl64_ifindex = tnl44_ifindex = 0;      
++      fprintf(stderr,"Here!!\n");
++	  pctime();//a:syl
++	  tunnel64_del(tnl64_ifindex);//d:syl
++      pctime();//a:syl
++	  tunnel44_del(tnl44_ifindex);//d:syl
++      pctime();//a:syl
++	  tnl64_ifindex = tnl44_ifindex = 0;      
+       //old coa is ipv4 with NAT
+     }
+     //add new udp encapsulation and route
+@@ -769,14 +800,21 @@
+     tnl64_ifindex = tnl64_ifindex_tmp;
+     tnl44_ifindex = tnl44_ifindex_tmp;
+     //if(current_coa_type == (uint8_t)(-1))
+-    mod_ipv6_gateway();
++    //nat_probe_send_simple(ifindex, *coav4);
++	mod_ipv6_gateway();
+     current_coa_type = type;
+-    int k;
+-    for(k=0;consecutive_bu && k<10;++k)
+-      sendbu(&hav6,
++    int k = consecutive_bu?10:1;
++    for(;k>0;--k)
++	{
++      //nat_probe_send_simple(ifindex, *coav4);
++	  nat_probe_send(ifindex, *coav4);
++	  usleep(10*1000);
++	  sendbu(&hav6,
+ 	   &hoav6,
+ 	   &mapped_v4coa,
+-	   __BU_SEQ__++);	
++	   __BU_SEQ__++);
++	  usleep(10*1000);
++	}	
+     consecutive_bu = 0;
+   }//ipv4 coa
+   return 0;
+@@ -875,10 +913,10 @@
+ 	    pctime();
+ 	    fprintf(stderr,"%s is up\n",ifname);
+ 	    consecutive_bu = 1;
+-		//a:syl for test
+-		system("ip -6 addr show dev wlan0");
+-	    system("ip -6 route show dev wlan0");
++	    //last_bu_t  = 0;
++	    //addr_del(&ifaces[i].coav6, 128, ifaces[i].ifindex);
+ 	    //ifconfig eth0 up
++		cngictrl_ipfix(1);//a:syl
+ 	  }
+ 	  else{
+ 	    //ifconfig eth0 down
+@@ -890,31 +928,44 @@
+ 	      if(ifaces[imn].invalidv6==0){
+ 		//delete current v6 coa and v6 route
+ 		/*
+-		fprintf(stderr,"deleting %x:%x:%x:%x:%x:%x:%x:%x(%d)\n",
++		  fprintf(stderr,"deleting %x:%x:%x:%x:%x:%x:%x:%x(%d)\n",
+ 			NIP6ADDR(&ifaces[imn].coav6),
+ 			ifaces[imn].ifindex);
+-		addr_del(&ifaces[imn].coav6, 128, ifaces[imn].ifindex);
++		  addr_del(&ifaces[imn].coav6, 128, ifaces[imn].ifindex);
+ 		*/
+-		char cmd[100];
+-		pctime();fprintf(stderr,"start delete route\n");
+-		//system("ip -6 addr flush dev wlan0");
+-		//a:syl for test
+-		//system("ip -6 addr del 2001:cc0:2026:5:221:e8ff:fefb:e658/64 dev wlan0");
+-		//system("ip -6 route del 2001:cc0:2026:5::/64 dev wlan0");
+-		//system("ip -6 route del default via fe80::214:78ff:fe84:5d3a dev wlan0");
+-		
+-		//sprintf(cmd,"ip -6 route del /64 dev wlan0");
+-		//fprintf(stderr,"%s\n",cmd);system(cmd);
+-		sprintf(cmd,"ip -6 route del default via %s dev wlan0",sold_rtaddr);
+-		fprintf(stderr,"%s\n",cmd);//system(cmd);
+-		pctime();fprintf(stderr,"end delete route\n");
++		//char cmd[100];
++		//pctime();fprintf(stderr,"start delete route\n");
++		//sprintf(cmd,"ip -6 route del default via %s",sold_rtaddr);
++		//system(cmd);
++		//fprintf(stderr,"%s\n",cmd);
++		//pctime();fprintf(stderr,"end delete route\n");
+ 	      }
+ 	      pctime();
+-	      fprintf(stderr,"make iface %d invalid v4 and v6 coa\n",
++	      fprintf(stderr,"link down, make iface %d invalid v4 and v6 coa\n",
+ 		      imn);
++		  cngictrl_ipfix(0);//a:syl
+ 	      ifaces[imn].invalidv6=1;
+ 	      ifaces[imn].invalidv4=1;
+-	    }
++	    if(auto_handoff_enabled){  
++		for(imn=0;imn<NIF;++imn){
++		if(ifaces[imn].ifindex>0&&
++		   ifaces[imn].ifindex!=ifi->ifi_index&&
++		   (ifaces[imn].flags&IFF_RUNNING)&&(ifaces[imn].flags&IFF_UP))
++		  break;
++	      }
++	      if(imn<NIF){
++		if(ifaces[imn].invalidv6==0){
++		  preferred_ifindex=ifaces[imn].ifindex;
++		  do_handoff(&ifaces[imn].coav6,0,ifaces[imn].ifindex,-1);
++		}
++		else if(ifaces[imn].invalidv4==0){
++		  preferred_ifindex=ifaces[imn].ifindex;
++		  do_handoff(0,&ifaces[imn].coav4,ifaces[imn].ifindex,1);
++		}
++	      }//if(imn<NIF) find alterative iface if current one is down
++	    	//cngictrl_ipfix(0);//a:syl
++		 }//if(auto_handoff_enabled)
++		}//if(imn<NIF) find current iface
+ 	  }
+ 	}
+       }//
+@@ -943,12 +994,14 @@
+ 	  if(ifi->ifi_flags&(IFF_UP|IFF_RUNNING)){
+ 	    pctime();
+ 	    fprintf(stderr,"gprs card is up.\n");
++		cngictrl_gprsfix();
+ 	    //ifconfig gprs up
+ 	  }
+ 	  else{
+ 	    //ifconfig gprs down
+ 	    //check if current ifindex is gprs, 
+ 	    //if it is, delete the tunnels and routes
++		fprintf(stderr,"gprs card is down.\n");
+ 	  }
+ 	}
+       }
+@@ -1005,12 +1058,11 @@
+     //-----------------------------------------------------------------
+   }//end of RTM_DELLINK
+   gettimeofday (&tvafter , &tz);
+-  //printf("NOTE: process_link used %ld ms.\n",(tvafter.tv_sec-tvpre.tv_sec)*1000+(tvafter.tv_usec-tvpre.tv_usec)/1000);
+   int timeused = (tvafter.tv_sec-tvpre.tv_sec)*1000+
+     (tvafter.tv_usec-tvpre.tv_usec)/1000;
+   if(timeused)
+     fprintf(stderr,"NOTE: process_link uses %d ms.\n",
+-	   timeused);
++	    timeused);
+   
+   return 0;
+ }
+@@ -1056,7 +1108,9 @@
+       pctime();
+       fprintf(stderr,"NEW ADDR %x:%x:%x:%x:%x:%x:%x:%x\n",
+ 	      NIP6ADDR(addr6));
+-
++      if(consecutive_bu){
++	last_bu_t = 0;
++      }
+       //------------------------------------------------------
+       //new IPv6 address is added
+       //handoff may happen here
+@@ -1138,9 +1192,10 @@
+ 	  memset(ifaces+i,0,sizeof(struct _iface));
+ 	  return 0;
+ 	}
+-	iswlan = memcmp(ifaces[i].ifname,wlan_name,sizeof(char)*strlen(wlan_name))==0;
++	//iswlan = memcmp(ifaces[i].ifname,wlan_name,sizeof(char)*strlen(wlan_name))==0;
+ 	ifaces[i].invalidv6=1;
+       }//i==NIF
++	  iswlan = memcmp(ifaces[i].ifname,wlan_name,sizeof(char)*strlen(wlan_name))==0;
+       ifaces[i].invalidv4=0;      
+       ifaces[i].flags=IFF_UP|IFF_RUNNING;//it must be running and up
+       ifaces[i].coav4 = *addr4;
+@@ -1248,15 +1303,18 @@
+ 	      if(ifaces[imn].invalidv6==0){
+ 		preferred_ifindex = ifaces[imn].ifindex;
+ 		do_handoff(&ifaces[imn].coav6,0,ifaces[imn].ifindex,-1);
+-	      }
++	     break;
++		 }
+ 	      else if(ifaces[imn].invalidv4==0){
+ 		preferred_ifindex = ifaces[imn].ifindex;		
+ 		do_handoff(0,&ifaces[imn].coav4,ifaces[imn].ifindex,1);
+-	      }
++	      break;
++		  }
+ 	      else {
+ 		preferred_ifindex = 0;
+ 		do_handoff(&hoav6,0,preferred_ifindex,-1);
+-	      }
++	      break;
++		  }
+ 	      //handoff to home link, delete all routes and rules
+ 	    }
+ 	    break;
+@@ -1352,6 +1410,13 @@
+   keepworking = 0;
+ }
+ 
++void _sigchld_handler(int num)
++{
++  int status;
++  int pid = waitpid(-1,&status,WNOHANG);
++  pctime();
++  fprintf(stderr,"child %d exited with code %d\n",pid,status);
++}
+ 
+ void listen_udpencap_init()
+ {
+@@ -1416,6 +1481,7 @@
+   inaddr_any.s_addr = 0;
+   iface_proc_entries_init("default");
+   signal(SIGINT, _sigint_handler);
++  signal(SIGCHLD, _sigchld_handler);
+   int i = 0;
+   memset(ifaces,0,sizeof(struct _iface)*NIF);
+   memset(&current_coav6,0,sizeof(current_coav6));
+@@ -1569,6 +1635,7 @@
+   //firstly we need to set rules and policies 
+   //to bypass the encapsulation and route
+   //after sending the probe we delete the rules
++  //return 0;//a:syl
+   struct sockaddr_in dest, src;
+   int sock_fd;
+   int n;
+@@ -1583,12 +1650,16 @@
+   if(setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag)) <0){
+     fprintf(stderr,"udp rebind error!.\n");
+   }
++  pctime();//a:syl
+   while(bind(sock_fd, (struct sockaddr *) &src, sizeof(src))){
+     time_t t = time(0);
+     fprintf(stderr,"%s",ctime(&t));
+-    perror("nat_probe sender bind error:");
++    pctime();//a:syl
++	perror("nat_probe sender bind error:");
+     //return 0;
++	usleep(10*1000);
+   }
++  pctime();//a:syl
+   struct NATINFO data;
+   data.hoa=hoav6;
+   data.port = 666;
+@@ -1603,6 +1674,7 @@
+   fprintf(stderr,"rule4_add to default table. %d\n",__LINE__);    
+   rule4_add(0,MN_ROUTE_DEFAULT,RULE_MOBILE_PRIO-30,RTN_UNICAST,
+ 	    &addrv4,32,&inaddr_any,0,0);
++  pctime();//a:syl
+   n = sendto(sock_fd,&data,sizeof(data),0,(struct sockaddr *)&dest, sizeof(dest));
+   if(-1==n){
+     perror("send nat probe error\n");
+@@ -1613,16 +1685,61 @@
+     fprintf(stderr,"[%02d:%02d:%02d] send nat probe.\n",curtm->tm_hour,
+ 	    curtm->tm_min,curtm->tm_sec);
+   }
++  pctime();//a:syl
+   //delete bypass rule --------------------------
+   //delete route which let the packet lookup default route table
+   fprintf(stderr,"rule4_del %d\n",__LINE__);
+   rule4_del(0,MN_ROUTE_DEFAULT,
+ 	    RULE_MOBILE_PRIO-30, RTN_UNICAST,	      
+ 	    &addrv4,32,&inaddr_any,0,0);
++  pctime();//a:syl
+   close(sock_fd);
+   return n;
+ }
+-
++/*
++inline int nat_probe_send_simple(int ifindex, struct in_addr addrv4)
++{
++  //send nat probe
++  //used before BU
++  struct sockaddr_in dest, src;
++  int sock_fd;
++  int n;
++  int flag=1;
++  bzero(&dest,sizeof(dest));
++  dest.sin_family = AF_INET;
++  dest.sin_addr = hav4;
++  dest.sin_port = htons(667);
++  sock_fd = socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP);
++  src.sin_addr = addrv4;
++  src.sin_port = htons(666);
++  if(setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag)) <0){
++    fprintf(stderr,"udp rebind error!.\n");
++  }
++  while(bind(sock_fd, (struct sockaddr *) &src, sizeof(src))){
++    time_t t = time(0);
++    fprintf(stderr,"%s",ctime(&t));
++    perror("nat_probe_simple sender bind error:");
++    //return 0;
++  }
++  struct NATINFO data;
++  data.hoa=hoav6;
++  data.port = 666;
++  data.seqno = 12345;
++  data.ifindex = ifindex;
++  data.coa = addrv4;
++  data.checksum = data.seqno^data.ifindex^data.port;
++  //bypass rule ---------------------------------
++  struct in_addr inaddr_any;
++  inaddr_any.s_addr = 0;
++  //let the packet lookup default route table, (GPRS)
++  n = sendto(sock_fd,&data,sizeof(data),0,(struct sockaddr *)&dest, sizeof(dest));
++  if(-1==n){
++    perror("send nat probe error\n");
++  }
++  close(sock_fd);
++  return n;
++}
++*/
+ int nat_probe_worker()
+ {
+   struct timeval tvafter,tvpre;
+@@ -1682,31 +1799,33 @@
+   return 0;
+ }
+ 
+-int bu_worker()
+-{
++
++int bu_worker(int force)
++{/*
+   struct timeval tvafter,tvpre;
+   struct timezone tz;
+-  gettimeofday (&tvpre , &tz);
++  gettimeofday (&tvpre , &tz);*/
+ 
++  const static int bu_interval = 10;
+   //send bu to HA periodly 
+   int now = uptime();
+-  if(abs(last_bu_t-now)>10){
+-    if(current_coa_type==(uint8_t)-1){
++  if(abs(last_bu_t-now)>bu_interval||force){
++    if(current_coa_type==(uint8_t)-1){//ipv6
+       sendbu(&hav6,&hoav6,&current_coav6,__BU_SEQ__++);
+     }
+-    else if(current_coa_type==1||
++    else if(current_coa_type==1||//ipv4
+ 	    current_coa_type==2){
+       struct in6_addr mapped_coa;
+       ipv6_map_addr(&mapped_coa,&current_coav4);
+       sendbu(&hav6,&hoav6,&mapped_coa,__BU_SEQ__++);
+     }
+-    else return 0;
++    else return 0;/*
+     gettimeofday (&tvafter , &tz);
+     int timeused = (tvafter.tv_sec-tvpre.tv_sec)*1000+
+       (tvafter.tv_usec-tvpre.tv_usec)/1000;
+     if(timeused)
+       fprintf(stderr,"NOTE: bu_worker uses %d ms.\n",
+-	     timeused);
++	     timeused);*/
+ 	   
+     
+   }
+@@ -1753,7 +1872,9 @@
+ #define CTRL_CMD_AP_OFF  3
+ #define CTRL_CMD_AP_ON   4
+ #define CTRL_CMD_AP_MOVE 5
+- 
++#define CTRL_CMD_AUTO_HANDOFF_ON 6
++#define CTRL_CMD_AUTO_HANDOFF_OFF 7
++
+ struct CTRL_CMD{
+   uint16_t cmd;//lscoa //handoff ifindex
+   
+@@ -1833,7 +1954,12 @@
+     case CTRL_CMD_HANDOFF:
+       ack[0]=0;
+       preferred_ifindex = cmd_data.data;
+-      if(current_ifindex==preferred_ifindex){
++     if(current_ifindex!=preferred_ifindex&&auto_handoff_enabled){
++    	sprintf(tmpbuf,"You must firstly disable auto_handoff(handoff off)\n");
++   		strcat(ack,tmpbuf);
++      }
++      else
++	  if(current_ifindex==preferred_ifindex){
+ 	sprintf(tmpbuf,"system is already running on interface %d\n",preferred_ifindex);
+ 	strcat(ack,tmpbuf);
+       }
+@@ -1872,6 +1998,12 @@
+       sendto(ctrl_fd,&ctrl_ack,sizeof(ctrl_ack),0,(struct sockaddr*)&rin,
+ 	     sizeof(rin));      
+       break;
++	case CTRL_CMD_AUTO_HANDOFF_ON:
++      auto_handoff_enabled=1;
++      break;
++    case CTRL_CMD_AUTO_HANDOFF_OFF:
++      auto_handoff_enabled=0;
++      break;
+     default:
+       break;
+     }
+@@ -1885,8 +2017,144 @@
+   return 0;
+ }
+ 
++#ifdef EXTERNAL_CTRL
++/*
++pthread_cond_t cond_main;
++
++//a:syl
++void *
++ipfix_done(void *arg)
++{
++	pthread_t tid_main=*(pthread_t *)arg;
++	struct CTRL_CMD cmd_data;
++    struct sockaddr_in rin;
++	int address_size = sizeof (rin);
++    //while(1)
++	do
++	{
++		int n = recvfrom (ctrl_fd, &cmd_data, sizeof(cmd_data),0,
++		      (struct sockaddr *) &rin,
++		      &address_size);
++		skip_ctrl_fd=1;
++		pctime();
++		fprintf(stderr,"\nrecvfrom cngictrl in ipfix_done\n");
++		//#define CTRL_CMD_IPFIXDONE 10
++		if(cmd_data.cmd==10){
++			pthread_cond_signal(&cond_main);
++			break;
++		}
++	}while(0);
++	return NULL;
++}
++*/
++
++//a:syl
++enum{
++	ACK_IPFIX=0,
++	ACK_RMNET,
++};
++
++void
++cngictrl_ipfix(int flag)
++{
++	struct CTRL_CMD_ACK ctrl_ack;	
++    struct sockaddr_in rin;
++	
++	ctrl_ack.seqno=0;
++	ctrl_ack.chksum=ACK_IPFIX;
++	ctrl_ack.ack[0]=flag;	
++	ctrl_ack.acklen=1;
++
++	bzero(&rin,sizeof(rin));
++  	rin.sin_family = AF_INET;
++	//rin.sin_addr.s_addr = INADDR_ANY;
++	inet_pton(AF_INET,"127.0.0.1",&rin.sin_addr);
++	rin.sin_port = htons(7776);
++	pctime();fprintf(stderr,"starting to send to cngictrl\n");
++	int n=sendto(ctrl_fd,&ctrl_ack,sizeof(ctrl_ack),0,(struct sockaddr*)&rin,sizeof(rin));
++	if(n==-1){
++		pctime();
++		perror("has sent,but failed!\n");
++	}
++	else{
++		pctime();
++		fprintf(stderr,"has sent, succeeded!\n");
++	}
++	/*	
++	//pthread_cond_t cond_ipfix_done;
++	pthread_t tid_ipfix_done;
++
++	tid_ipfix_done=0;
++	pthread_t tid_main=pthread_self();
++    if(pthread_create(&tid_ipfix_done,NULL,ipfix_done, (void *)&tid_main)<0){
++    	perror("ERROR: ipfix_done can't start\n");
++    }
++	else{
++		pthread_mutex_t mut=PTHREAD_MUTEX_INITIALIZER;
++    	struct timeval now;
++    	struct timespec timeout;
++		int retcode;
++
++		//while(1)
++		do{
++			pthread_mutex_lock(&mut);
++    		gettimeofday(&now, NULL);
++			timeout.tv_sec = now.tv_sec+5;
++			timeout.tv_nsec = now.tv_usec*1000;
++			if ((retcode = pthread_cond_timedwait(&cond_main, &mut, &timeout)) < 0) {
++      	   		perror("pthread_cond_timedwait");
++				break;
++    		}
++   	 		if (retcode != 110){
++				pthread_mutex_unlock(&mut);
++				break;
++        	}
++   			pthread_mutex_unlock(&mut);
++		} while(0);
++		pthread_join(tid_ipfix_done,NULL);
++		pctime();
++		fprintf(stderr,"\ncngictrl_ipfix blocking is now canceled by ipfix_done\n");
++	}
++	*/
++	
++	skip_ctrl_fd=0;
++	struct CTRL_CMD cmd_data;
++	int address_size = sizeof (rin);
++	n = recvfrom (ctrl_fd, &cmd_data, sizeof(cmd_data),0,(struct sockaddr *) &rin, &address_size);
++	pctime();
++	fprintf(stderr,"recvfrom cngictrl\n");
++	
++}
+ 
++void
++cngictrl_gprsfix()
++{
++	struct CTRL_CMD_ACK ctrl_ack;	
++    struct sockaddr_in rin;
++	
++	ctrl_ack.seqno=0;
++	ctrl_ack.chksum=ACK_RMNET;
++	ctrl_ack.ack[0]=1;	
++	ctrl_ack.acklen=1;
++
++	bzero(&rin,sizeof(rin));
++  	rin.sin_family = AF_INET;
++	//rin.sin_addr.s_addr = INADDR_ANY;
++	inet_pton(AF_INET,"127.0.0.1",&rin.sin_addr);
++	rin.sin_port = htons(7776);
++	pctime();fprintf(stderr,"starting to send to cngictrl\n");
++	int n=sendto(ctrl_fd,&ctrl_ack,sizeof(ctrl_ack),0,(struct sockaddr*)&rin,sizeof(rin));
++	if(n==-1){
++		pctime();
++		perror("has sent,but failed!\n");
++	}
++	else{
++		pctime();
++		fprintf(stderr,"has sent, succeeded!\n");
++	}
++}
+ 
++#endif
+ 
+ int link_event_fd_set(fd_set *rfds,int maxfd)
+ {
+@@ -1958,10 +2226,11 @@
+       //ra_fd_check(&rfds);
+       link_event_fd_check(&rfds);
+       nat_probe_fd_check(&rfds);//check to see if nat probes have ack
+-      ctrl_fd_check(&rfds);
++      if(skip_ctrl_fd++)
++	  	ctrl_fd_check(&rfds);
+     }
+     //do other things
+-    bu_worker();
++    bu_worker(0);
+     nat_probe_worker();
+   }
+   fprintf(stderr,"existing from mn_worker ... \n");

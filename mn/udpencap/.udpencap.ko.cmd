@@ -1,0 +1,1 @@
+cmd_/home/3240/external/dual-stack-mobile-ipv6-lh/udpencap/udpencap.ko := arm-eabi-ld -EL -r    -o /home/3240/external/dual-stack-mobile-ipv6-lh/udpencap/udpencap.ko /home/3240/external/dual-stack-mobile-ipv6-lh/udpencap/udpencap.o /home/3240/external/dual-stack-mobile-ipv6-lh/udpencap/udpencap.mod.o

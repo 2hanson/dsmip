@@ -1,0 +1,28 @@
+2011.11.30
+It's normally OK for final check.
+
+2012.03.26
+Fix the bug for
+	1.Cmd "link fix" (cannot fix wlan)
+	2.Fix linknumwlan, largen the cmdresult size from 1024 to 1024*10
+	3.Make rmnetcheck before iproutedel
+remain the bug for
+	1.When gprs/3G is first on (auto off), then if wlan is on, it will delete the route of rmnet
+
+2012.03.29
+Fix the bug for
+	1.When gprs/3G is first on (auto off), then if wlan is on, it will not delete the route of rmnet
+	2.Can not set wifi when auto off on rmnet (in "to" cmd and "bmisscntDetect" func)
+	3.Fix many small bugs
+
+	Note:
+	Please follow the principles below when playing the system (current situation):
+	1.At the begining when one card is on and auto is off, if you turn the other card and then handoff to it,
+	  the system will not recognize it (since the previous card is different and only one card status is
+	  allowed in the mn and ha).
+	2.If 1 happens, trigger it by switching the AP when using wlan card, or do handoff.
+	3.Due to 1, the best routine is, a. auto on and make both cards availuable (first wlan, and then rmnet)
+	  -> b. auto off and do handoff
+	4.Never do "wifi off" cmd (and maybe touch screen to make rmnet off) when the card is already on. Or it
+	  will cause fatal problem (send to 0.0.0.0 address).
+

@@ -1,0 +1,1 @@
+cmd_/root/lab/mn/tnls/2.6.29/ip6tnl/ip6_tunnel.ko := ld -r -m elf_i386  --build-id -o /root/lab/mn/tnls/2.6.29/ip6tnl/ip6_tunnel.ko /root/lab/mn/tnls/2.6.29/ip6tnl/ip6_tunnel.o /root/lab/mn/tnls/2.6.29/ip6tnl/ip6_tunnel.mod.o
