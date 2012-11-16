@@ -2302,6 +2302,7 @@ int mn_worker()
   return 0;
 }
 
+//a:yhz
 int mn_conf(char * filename)
 {
   FILE * fp = fopen(filename,"r");
@@ -2366,6 +2367,7 @@ int mn_conf(char * filename)
 
 int main()
 {
+    //a:yhz
 	if(mn_conf("conf/mn.conf")==-1)
 	{
 		inet_pton(AF_INET,_hoav4,&hoav4);
