@@ -1170,6 +1170,11 @@ handexit:           ;
 				if(strncmp(line,"help",4)==0){
 					usage();
 				}
+                //a: yhz
+				else 
+				if(strncmp(line,"flowhandoff", 11)==0){
+					usage();
+				}
 				else{
 					fprintf(stderr, "Command not found!\n");
 				}
