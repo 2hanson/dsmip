@@ -1,3 +1,8 @@
+/*
+ * author: hanson yu
+ * mail: hangzhong.yu@gmail.com
+ */
+
 #ifndef __CNGICTRL_XFRM_H__
 #define __CNGICTRL_XFRM_H__
 
@@ -12,7 +17,6 @@
 #include "common.h"
 #include "rtnl.h"
 
-//add by yhz
 //-------------------interfaces-------------------------------
 int doHandoffV4(const struct in_addr *HOA,
         const struct in_addr  *CNA,
