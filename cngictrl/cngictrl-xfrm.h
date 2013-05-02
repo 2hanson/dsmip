@@ -18,7 +18,7 @@
 #include "rtnl.h"
 
 //-------------------interfaces-------------------------------
-int doHandoffV4(const struct in_addr *HOA,
+int do_v4_handoff(const struct in_addr *HOA,
         const struct in_addr  *CNA,
         const struct in_addr  *COA,
         const struct in_addr  *HA,
