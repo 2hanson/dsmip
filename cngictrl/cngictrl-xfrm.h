@@ -28,7 +28,6 @@ int do_v4_handoff(const struct in_addr *HOA,
 //------------------------------------------------------------
 
 
-
 void set_v4_selector(const struct in_addr saddr,
         const struct in_addr daddr,
         int proto, int type, int code,
@@ -58,14 +57,21 @@ static void _create_v4_tmpl(struct xfrm_user_tmpl *tmpl,
 {
     memset(tmpl, 0, sizeof(*tmpl));
     utmpl->family = AF_INET;
-    utmpl->id.proto = IPPROTO_UDP_ENCAPSULATION;
-    utmpl->mode = mode;
-    utmpl->optional = 1;
-    utmpl->reqid = 0;
+    utmpl->mode = mode; // 0 for transport, 1 for tunnel
+    utmpl->reqid = 0xAF018; // some __u32 value
+    utmpl->id.proto = IPPROTO_ESP; // IPPROTO_ESP, IPPROTO_AH, IPPROTO_COMP
+    utmpl->optional = 1; // option 'level' of ip utility, 0 for 'required', 1 for 'use'
+    tmpl->id.spi = (__u32) 0x118; // some __u32 number
+
     if (dst.s_addr != INADDR_ANY)
         memcpy(&tmpl->id.daddr, &dst, sizeof(struct in_addr));
     if (src.s_addr != INADDR_ANY)
         memcpy(&tmpl->saddr, &src, sizeof(struct in_addr));
+
+    // set all algos to infinity:
+    tmpl->aalgos = (~(__u32)0);
+    tmpl->ealgos = (~(__u32)0);
+    tmpl->calgos = (~(__u32)0);
 }
 
 
@@ -76,7 +82,7 @@ static inline void create_v4_tmpl(struct xfrm_user_tmpl *tmpl,
         const struct in_addr *dst,
         const struct in_addr *src)
 {
-    _create_v4_tmpl(tmpl, dst, src, XFRM_MODE_TUNNEL);
+    _create_v4_tmpl(tmpl, dst, src, 1/*0 for transport, 1 for tunnel*/);
 }
 
 
@@ -121,8 +127,7 @@ int xfrm_v4_state_add(int proto, int update, uint8_t flags,
 
 
 
-static int xfrm_policy_add(uint8_t type, const struct xfrm_selector *sel,
-        int update, int dir, int action, int priority,
+static int xfrm_policy_add(uint8_t type, const struct xfrm_selector *sel, int dir, int action, int priority,
         struct xfrm_user_tmpl *tmpls, int num_tmpl)
 {
     uint8_t buf[NLMSG_SPACE(sizeof(struct xfrm_userpolicy_info))
@@ -137,13 +142,9 @@ static int xfrm_policy_add(uint8_t type, const struct xfrm_selector *sel,
     memset(buf, 0, sizeof(buf));
     n = (struct nlmsghdr *)buf;
     n->nlmsg_len = NLMSG_LENGTH(sizeof(struct xfrm_userpolicy_info));
-    if (update) {
-        n->nlmsg_flags = NLM_F_REQUEST | NLM_F_REPLACE;
-        n->nlmsg_type = XFRM_MSG_UPDPOLICY;
-    } else {
-        n->nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE;
-        n->nlmsg_type = XFRM_MSG_NEWPOLICY;
-    }
+    n->nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE;
+    n->nlmsg_type = XFRM_MSG_NEWPOLICY;
+    
     pol = NLMSG_DATA(n);
     memcpy(&pol->sel, sel, sizeof(struct xfrm_selector));
     xfrm_lft(&pol->lft);
@@ -161,19 +162,18 @@ static int xfrm_policy_add(uint8_t type, const struct xfrm_selector *sel,
                 tmpls, sizeof(struct xfrm_user_tmpl) * num_tmpl);
 
     if ((err = rtnl_xfrm_do(n, NULL)) < 0)
-        xfrm_policy_dump("Failed to add policy:\n",
-                n->nlmsg_flags, n->nlmsg_type,
-                pol, &ptype, tmpls, num_tmpl);
+    {  
+        //"Failed to add policy:\n",
+    }
     return err;
 }
 
 
 
-int xfrm_v4_policy_add(const struct xfrm_selector *sel,
-        int update, int dir, int action, int priority,
+int xfrm_v4_policy_add(const struct xfrm_selector *sel, int dir, int action, int priority,
         struct xfrm_user_tmpl *tmpls, int num_tmpl)
 {
-    return xfrm_policy_add(XFRM_POLICY_TYPE_SUB, sel, update, dir,
+    return xfrm_policy_add(XFRM_POLICY_TYPE_SUB, sel, dir,
             action, priority, tmpls, num_tmpl);
 }
 
@@ -186,12 +186,12 @@ int do_v4_handoff(const struct in_addr *HOA,
         int dport,
         int prio)
 {
-    int prio = 100;
     struct xfrm_user_tmpl tmpl;
     struct xfrm_selector sel;
+
     create_v4_tmpl(&tmpl, &COA, &HA);
     set_v4_selector(&HOA, &CNA, &sel);
-    //m: ld'
+    
     ret = xfrm_v4_state_add(prio, &sel, coa, hoa);
     //-----------------------------------bug: ----------------------
     //sel is same for state and policy;
@@ -202,10 +202,6 @@ int do_v4_handoff(const struct in_addr *HOA,
         //adding udp encap state for traffic  failed.
         return ret;
     }
-
-    set_v4_selector(inaddr_any,
-            *mn_addrv4,
-            prio, &sel);
     sel.family=AF_INET;
     sel.prefixlen_d = 0;
     sel.prefixlen_s = 32;
