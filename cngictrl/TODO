@@ -1,0 +1,13 @@
+task:
+handoff from ipv4-nat to 3g;
+
+my ideas:
+when user handoff one flow; then add a xfrm according this flow's property.
+
+done:
+finish coding:
+add xfrm(policy, tmpl, state)
+
+to do:
+debug
+
