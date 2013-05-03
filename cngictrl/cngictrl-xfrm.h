@@ -73,8 +73,8 @@ static inline void create_v4_tmpl(const struct in_addr *src,
     _create_v4_tmpl(src, dst, 1/*0 for transport, 1 for tunnel*/, tmpl);
 }
 
-int xfrm_v4_state_add(int prio, const struct in_addr *src, 
-        const struct in_addr *dst)
+int xfrm_v4_state_add(const struct in_addr *src, 
+        const struct in_addr *dst, int prio)
 {
     uint8_t buf[4096];
     struct nlmsghdr *n;
@@ -101,11 +101,8 @@ int xfrm_v4_state_add(int prio, const struct in_addr *src,
     return err;
 }
 
-
-
-
-static int xfrm_policy_add(uint8_t type, const struct xfrm_selector *sel, int dir, int action, int priority,
-        struct xfrm_user_tmpl *tmpls, int num_tmpl)
+static int xfrm_policy_add(int action, int dir, int priority, uint8_t type, 
+        const struct xfrm_selector *sel, struct xfrm_user_tmpl *tmpls, int num_tmpl)
 {
     uint8_t buf[NLMSG_SPACE(sizeof(struct xfrm_userpolicy_info))
         + RTA_SPACE(sizeof(struct xfrm_userpolicy_type))
@@ -145,13 +142,10 @@ static int xfrm_policy_add(uint8_t type, const struct xfrm_selector *sel, int di
     return err;
 }
 
-
-
-int xfrm_v4_policy_add(const struct xfrm_selector *sel, int dir, int action, int priority,
-        struct xfrm_user_tmpl *tmpls, int num_tmpl)
+int xfrm_v4_policy_add(int action, int dir, int priority, 
+        const struct xfrm_selector *sel, struct xfrm_user_tmpl *tmpls, int num_tmpl)
 {
-    return xfrm_policy_add(XFRM_POLICY_TYPE_SUB, sel, dir,
-            action, priority, tmpls, num_tmpl);
+    return xfrm_policy_add(action, dir, priority, XFRM_POLICY_TYPE_SUB, sel, tmpls, num_tmpl);
 }
 
 
@@ -169,7 +163,7 @@ int do_v4_handoff(const struct in_addr *HOA,
     create_v4_tmpl(&COA, &HA, &tmpl);
     set_v4_selector(&HOA, &CNA, &sel);
     
-    ret = xfrm_v4_state_add(prio, coa, hoa);
+    ret = xfrm_v4_state_add(coa, hoa, prio);
     //-----------------------------------bug: ----------------------
     //sel is same for state and policy;
     //---------------------------------------------
@@ -180,9 +174,7 @@ int do_v4_handoff(const struct in_addr *HOA,
         return ret;
     }
     sel.family=AF_INET;
-    ret += xfrm_v4_policy_add(&sel,
-            XFRM_POLICY_OUT,
-            XFRM_POLICY_ALLOW, prio, &tmpl, 1);
+    ret += xfrm_v4_policy_add(XFRM_POLICY_ALLOW, XFRM_POLICY_OUT, prio, &sel, &tmpl, 1);
 
     if (ret < 0)
     {
