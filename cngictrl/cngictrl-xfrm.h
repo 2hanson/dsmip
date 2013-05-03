@@ -51,7 +51,8 @@ static void _create_v4_tmpl(const struct in_addr *src,
     utmpl->family = AF_INET;
     utmpl->mode = mode; // 0 for transport, 1 for tunnel
     utmpl->reqid = 0xAF018; // some __u32 value
-    utmpl->id.proto = IPPROTO_ESP; // IPPROTO_ESP, IPPROTO_AH, IPPROTO_COMP
+    ----------------------bug-------------------------------------------------------------------------------------
+    utmpl->id.proto = UDP; // IPPROTO_ESP, IPPROTO_AH, IPPROTO_COMP
     utmpl->optional = 1; // option 'level' of ip utility, 0 for 'required', 1 for 'use'
     tmpl->id.spi = (__u32) 0x118; // some __u32 number
 
