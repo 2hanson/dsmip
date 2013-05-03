@@ -28,16 +28,13 @@ int do_v4_handoff(const struct in_addr *HOA,
 //------------------------------------------------------------
 
 void set_v4_selector(const struct in_addr saddr,
-        const struct in_addr daddr,
-        int proto, int type, int code,
-        int ifindex, struct xfrm_selector *sel)
+        const struct in_addr daddr, 
+        struct xfrm_selector *sel)
 {
     memset(sel, 0, sizeof(*sel));
 
     sel->family = AF_INET;
     sel->user = getuid();
-    sel->ifindex = ifindex;
-    sel->proto = proto;
     memcpy(&sel->saddr.a4, &saddr, sizeof(struct in_addr));
     memcpy(&sel->daddr.a4, &daddr, sizeof(struct in_addr));
     if (daddr.s_addr != INADDR_ANY)
