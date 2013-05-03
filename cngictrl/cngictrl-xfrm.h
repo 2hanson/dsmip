@@ -76,8 +76,8 @@ static inline void create_v4_tmpl(const struct in_addr *src,
     _create_v4_tmpl(src, dst, 1/*0 for transport, 1 for tunnel*/, tmpl);
 }
 
-int xfrm_v4_state_add(int prio, int proto, const struct in_addr *src, 
-        const struct in_addr *dst, const struct xfrm_selector *v4)
+int xfrm_v4_state_add(int prio, const struct in_addr *src, 
+        const struct in_addr *dst)
 {
     uint8_t buf[4096];
     struct nlmsghdr *n;
@@ -172,7 +172,7 @@ int do_v4_handoff(const struct in_addr *HOA,
     create_v4_tmpl(&COA, &HA, &tmpl);
     set_v4_selector(&HOA, &CNA, &sel);
     
-    ret = xfrm_v4_state_add(prio, &sel, coa, hoa);
+    ret = xfrm_v4_state_add(prio, coa, hoa);
     //-----------------------------------bug: ----------------------
     //sel is same for state and policy;
     //---------------------------------------------
