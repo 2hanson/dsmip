@@ -27,7 +27,6 @@ int do_v4_handoff(const struct in_addr *HOA,
         int prio);
 //------------------------------------------------------------
 
-
 void set_v4_selector(const struct in_addr saddr,
         const struct in_addr daddr,
         int proto, int type, int code,
@@ -47,13 +46,9 @@ void set_v4_selector(const struct in_addr saddr,
         sel->prefixlen_s = 32;
 }
 
-
-
-
-static void _create_v4_tmpl(struct xfrm_user_tmpl *tmpl,
+static void _create_v4_tmpl(const struct in_addr *src, 
         const struct in_addr *dst,
-        const struct in_addr *src,
-        int mode)
+        int mode, struct xfrm_user_tmpl *tmpl)
 {
     memset(tmpl, 0, sizeof(*tmpl));
     utmpl->family = AF_INET;
@@ -64,9 +59,9 @@ static void _create_v4_tmpl(struct xfrm_user_tmpl *tmpl,
     tmpl->id.spi = (__u32) 0x118; // some __u32 number
 
     if (dst.s_addr != INADDR_ANY)
-        memcpy(&tmpl->id.daddr, &dst, sizeof(struct in_addr));
+        memcpy(&tmpl->id.daddr, dst, sizeof(struct in_addr));
     if (src.s_addr != INADDR_ANY)
-        memcpy(&tmpl->saddr, &src, sizeof(struct in_addr));
+        memcpy(&tmpl->saddr, src, sizeof(struct in_addr));
 
     // set all algos to infinity:
     tmpl->aalgos = (~(__u32)0);
@@ -74,24 +69,15 @@ static void _create_v4_tmpl(struct xfrm_user_tmpl *tmpl,
     tmpl->calgos = (~(__u32)0);
 }
 
-
-
-
-
-static inline void create_v4_tmpl(struct xfrm_user_tmpl *tmpl,
-        const struct in_addr *dst,
-        const struct in_addr *src)
+static inline void create_v4_tmpl(const struct in_addr *src, 
+        const struct in_addr *dst, 
+        struct xfrm_user_tmpl *tmpl)
 {
-    _create_v4_tmpl(tmpl, dst, src, 1/*0 for transport, 1 for tunnel*/);
+    _create_v4_tmpl(src, dst, 1/*0 for transport, 1 for tunnel*/, tmpl);
 }
 
-
-
-
-
-
-int xfrm_v4_state_add(int proto, int update, uint8_t flags,
-        const struct xfrm_selector *v4)
+int xfrm_v4_state_add(int prio, int proto, const struct in_addr *src, 
+        const struct in_addr *dst, const struct xfrm_selector *v4)
 {
     uint8_t buf[4096];
     struct nlmsghdr *n;
@@ -101,22 +87,16 @@ int xfrm_v4_state_add(int proto, int update, uint8_t flags,
     memset(buf, 0, sizeof(buf));
     n = (struct nlmsghdr *)buf;
     n->nlmsg_len = NLMSG_LENGTH(sizeof(struct xfrm_usersa_info));
-    if (update) {
-        n->nlmsg_flags = NLM_F_REQUEST | NLM_F_REPLACE;
-        n->nlmsg_type = XFRM_MSG_UPDSA;
-    } else {
-        n->nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE;
-        n->nlmsg_type = XFRM_MSG_NEWSA;
-    }
+    n->nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE;
+    n->nlmsg_type = XFRM_MSG_NEWSA;
     sa = NLMSG_DATA(n);
     /* DSMIPv6: src and dst addresses for IPv4 header */
-    memcpy(&sa->id.daddr.a4, &v4->daddr.a4, sizeof(v4->daddr.a4));
+    memcpy(&sa->id.daddr.a4, dst, sizeof(dst));
     sa->id.proto = proto;
-    memcpy(&sa->saddr.a4, &v4->saddr.a4, sizeof(v4->saddr.a4));
+    memcpy(&sa->saddr.a4, src, sizeof(src));
     xfrm_lft(&sa->lft);
     sa->family = AF_INET;
     sa->mode = XFRM_MODE_TUNNEL;
-    sa->flags = flags;
 
     if ((err = rtnl_xfrm_do(n, NULL)) < 0){
         perror("rtnl_xfrm_do:\n");
@@ -189,7 +169,7 @@ int do_v4_handoff(const struct in_addr *HOA,
     struct xfrm_user_tmpl tmpl;
     struct xfrm_selector sel;
 
-    create_v4_tmpl(&tmpl, &COA, &HA);
+    create_v4_tmpl(&COA, &HA, &tmpl);
     set_v4_selector(&HOA, &CNA, &sel);
     
     ret = xfrm_v4_state_add(prio, &sel, coa, hoa);
@@ -203,8 +183,6 @@ int do_v4_handoff(const struct in_addr *HOA,
         return ret;
     }
     sel.family=AF_INET;
-    sel.prefixlen_d = 0;
-    sel.prefixlen_s = 32;
     ret += xfrm_v4_policy_add(&sel,
             XFRM_POLICY_OUT,
             XFRM_POLICY_ALLOW, prio, &tmpl, 1);
