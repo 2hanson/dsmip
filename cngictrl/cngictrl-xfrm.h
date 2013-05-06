@@ -60,7 +60,6 @@ static void _create_v4_tmpl(const struct in_addr *src,
     utmpl->family = AF_INET;
     utmpl->mode = mode; // 0 for transport, 1 for tunnel
     utmpl->reqid = 0xAF018; // some __u32 value
-    ----------------------bug-------------------------------------------------------------------------------------
     //m: ld 13/5/5 13:44
     utmpl->id.proto = IPPROTO_UDP_ENCAPSULATION; // IPPROTO_ESP, IPPROTO_AH, IPPROTO_COMP
     utmpl->optional = 1; // option 'level' of ip utility, 0 for 'required', 1 for 'use'
@@ -199,9 +198,6 @@ int do_v4_handoff(const struct in_addr *HOA,
     set_v4_selector(&HOA, &CNA, &sel);
     //m:ld change hoa to ha
     ret = xfrm_v4_state_add(sel, coa, ha, proto, etmpl);
-    //-----------------------------------bug: ----------------------
-    //sel is same for state and policy;
-    //---------------------------------------------
     if (ret < 0)
     {
         //error
