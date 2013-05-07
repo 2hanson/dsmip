@@ -18,8 +18,9 @@
 
 #include "athdrv_linux.h"
 #include "cngictrl.h"
-
+#include "cngictrl-xfrm.h"
 #include <errno.h>
+
 #define errBmisscntDetect(args...) do { \
 	bmisscntDetect_run=OFF; \
     fprintf(stderr, "\n%s: line %d ", __FILE__, __LINE__); \
@@ -1173,7 +1174,7 @@ handexit:           ;
                 //a: yhz
 				else 
 				if(strncmp(line,"flowhandoff", 11)==0){
-					usage();
+					xfrm_test();
 				}
 				else{
 					fprintf(stderr, "Command not found!\n");
