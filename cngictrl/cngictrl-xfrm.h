@@ -141,7 +141,7 @@ int xfrm_v4_state_add(/*ld*/const struct xfrm_selector *sel/*ld*/,
 			sizeof(struct xfrm_encap_tmpl));
 
 	if ((err = rtnl_xfrm_do(n, NULL)) < 0){
-		perror("rtnl_xfrm_do:\n");
+		perror("line at 144, rtnl_xfrm_do:\n");
 	}
 	return err;
 }
@@ -182,6 +182,7 @@ static int xfrm_policy_add(int action, int dir, int priority, uint8_t type,
 
 	if ((err = rtnl_xfrm_do(n, NULL)) < 0)
 	{  
+		perror("line at 185, rtnl_xfrm_do: Failed to add policy.\n");
 		//"Failed to add policy:\n",
 	}
 	return err;
@@ -222,7 +223,6 @@ int do_v4_handoff(const struct in_addr *HOA,
 		//adding udp encap state for traffic  failed.
 		return ret;
 	}
-	sel.family=AF_INET;
 	ret += xfrm_v4_policy_add(XFRM_POLICY_ALLOW, XFRM_POLICY_OUT, prio, &sel, &tmpl, 1);
 
 	if (ret < 0)
