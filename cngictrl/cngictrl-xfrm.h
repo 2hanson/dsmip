@@ -205,7 +205,6 @@ int xfrm_v4_policy_add(int action, int dir, int priority,
  */
 int add_state_3des() {
 
-    struct rtnl_handle rth;
     struct {
         struct nlmsghdr     n;
         struct xfrm_usersa_info xsinfo;
@@ -303,13 +302,11 @@ int add_state_3des() {
     int len = sizeof(struct xfrm_algo) + des.alg.alg_key_len;
     addattr_l(&req.n, sizeof(req.buf), XFRMA_ALG_CRYPT, (void *)&des, len);
 
-    if (rtnl_open_byproto(&rth, 0, NETLINK_XFRM) < 0)
-        exit(1);
+	int err = 0;
 
-    if (rtnl_talk(&rth, &req.n, 0, 0, NULL, NULL, NULL) < 0)
-        exit(2);
-
-    rtnl_close(&rth);
+	if ((err = rtnl_xfrm_do(&req.n, NULL)) < 0){
+		perror("line at 308, rtnl_xfrm_do:\n");
+	}
 
     return 0;
 }
@@ -344,7 +341,8 @@ int do_v4_handoff(const struct in_addr *HOA,
 		//adding udp encap state for traffic  failed.
 		return ret;
 	}*/
-	int ret += xfrm_v4_policy_add(XFRM_POLICY_ALLOW, XFRM_POLICY_OUT, prio, &sel, &tmpl, 1);
+	int ret = 0;
+	ret+=xfrm_v4_policy_add(XFRM_POLICY_ALLOW, XFRM_POLICY_OUT, prio, &sel, &tmpl, 1);
 
 	if (ret < 0)
 	{
