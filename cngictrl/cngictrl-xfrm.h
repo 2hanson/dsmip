@@ -31,7 +31,10 @@ int do_v4_handoff(const struct in_addr *HOA,
 //added by ld 13/5/5 13:50
 #define DSMIP_UDP_DPORT 666
 #define UDP_ENCAP_IP_VANILLA 4
-
+#define _hoav4 "172.16.0.197" 
+#define _cnav4 "172.16.0.198" 
+#define _coav4 "172.16.0.199" 
+#define _hav4 "172.16.0.200" 
 #ifndef IPPROTO_UDP_ENCAPSULATION
 #define IPPROTO_UDP_ENCAPSULATION 166 
 #endif
@@ -229,6 +232,19 @@ int do_v4_handoff(const struct in_addr *HOA,
 		return ret;
 	}
 	return 0;
+}
+
+int do_handoff()
+{
+	struct in_addr  hoav4;
+	struct in_addr  coav4;
+	struct in_addr  cnav4;
+	struct in_addr  hav4;
+	inet_pton(AF_INET,_hoav4,&hoav4);
+	inet_pton(AF_INET,_cnav4,&coav4);
+	inet_pton(AF_INET,_coav4,&cnav4);
+	inet_pton(AF_INET,_hav4,&hav4);
+	do_v4_handoff(hoav4, coav4, cnav4, hav4, 5000, 5000, 1);
 }
 
 void xfrm_test()

@@ -1173,8 +1173,8 @@ handexit:           ;
 				}
                 //a: yhz
 				else 
-				if(strncmp(line,"flowhandoff", 11)==0){
-					xfrm_test();
+				if(strncmp(line,"flowhf", 11)==0){
+					do_handoff();
 				}
 				else{
 					fprintf(stderr, "Command not found!\n");
