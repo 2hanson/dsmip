@@ -244,7 +244,9 @@ int do_handoff()
 	inet_pton(AF_INET,_cnav4,&coav4);
 	inet_pton(AF_INET,_coav4,&cnav4);
 	inet_pton(AF_INET,_hav4,&hav4);
-	do_v4_handoff(hoav4, coav4, cnav4, hav4, 5000, 5000, 1);
+	do_v4_handoff(&hoav4, &coav4, &cnav4, &hav4, 5000, 5000, 1);
+
+	return 0;
 }
 
 void xfrm_test()

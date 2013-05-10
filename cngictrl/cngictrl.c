@@ -1173,7 +1173,7 @@ handexit:           ;
 				}
                 //a: yhz
 				else 
-				if(strncmp(line,"flowhf", 11)==0){
+				if(strncmp(line,"flowhf", 6)==0){
 					do_handoff();
 				}
 				else{
