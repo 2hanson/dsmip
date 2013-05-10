@@ -192,6 +192,129 @@ int xfrm_v4_policy_add(int action, int dir, int priority,
 }
 
 
+#define RTA_BUF_SIZE 2048
+#define XFRM_ALGO_KEY_BUF_SIZE 512
+
+/**
+ * This example will insert new security association (SA) in kernel's
+ * security association database (SADB).
+ * 
+ * Ip equivalent is:
+ *     ip xfrm state add src 10.0.11.41 dst 10.0.11.33 proto esp 
+ *     enc des3_ede 0x79b5d6e36dda9da4982f51293767d6108649ced573c8349e
+ */
+int add_state_3des() {
+
+    struct rtnl_handle rth;
+    struct {
+        struct nlmsghdr     n;
+        struct xfrm_usersa_info xsinfo;
+        char            buf[RTA_BUF_SIZE];
+    } req;
+
+    memset( &req, 0, sizeof(req) );
+
+    // Netlink Header:
+    req.n.nlmsg_len = NLMSG_LENGTH( sizeof(req.xsinfo) );
+    req.n.nlmsg_flags = NLM_F_REQUEST|NLM_F_CREATE|NLM_F_EXCL;
+    req.n.nlmsg_type = XFRM_MSG_NEWSA;
+
+
+    // primitive xsinfo fields:
+    req.xsinfo.family = AF_INET;        // IP4
+    req.xsinfo.saddr.a4 = 0x290b000a;   // saddr = 10.0.11.41
+    // req.xsinfo.seq = ;
+    // req.xsinfo.reqid = (__u32) 0;       // __u32 value
+    // req.xsinfo.mode = (__u8) 0;         // 0=transport,1=tunnel
+    // req.xsinfo.replay_window = (__u8) 0;// __u8 value
+    // req.xsinfo.flags = ;             // XFRM_STATE_NOECN, XFRM_STATE_DECAP_DSCP
+
+    // ID:
+    req.xsinfo.id.daddr.a4 = 0x210b000a;// daddr = 10.0.11.33
+    req.xsinfo.id.proto = IPPROTO_ESP;  // IPPROTO_ESP, IPPROTO_AH, IPPROTO_COMP, IPPROTO_IPV6 (testing only)
+    req.xsinfo.id.spi = (__u32) 0x0010001; // __u32 value
+
+    // LFT:
+    // set this to value you desire or to infinity if you dont' want any limits
+    req.xsinfo.lft.soft_byte_limit = XFRM_INF;
+    req.xsinfo.lft.hard_byte_limit = XFRM_INF;
+    req.xsinfo.lft.soft_packet_limit = XFRM_INF;
+    req.xsinfo.lft.hard_packet_limit = XFRM_INF;
+    // req.xsinfo.lft.soft_add_expires_seconds = ;
+    // req.xsinfo.lft.soft_add_expires_seconds = ;
+    // req.xsinfo.lft.soft_add_expires_seconds = ;
+    // req.xsinfo.lft.soft_add_expires_seconds = ;
+
+    // SEL:
+    // req.xsinfo.sel.daddr = ;
+    // req.xsinfo.sel.saddr = ;
+    // req.xsinfo.sel.dport = ;
+    // req.xsinfo.sel.dport_mask = ;
+    // req.xsinfo.sel.sport = ;
+    // req.xsinfo.sel.sport_mask = ;
+    // req.xsinfo.sel.family = ;
+    // req.xsinfo.sel.prefixlen_d = ;
+    // req.xsinfo.sel.prefixlen_s = ;
+    // req.xsinfo.sel.proto = ;
+    // req.xsinfo.sel.ifindex = ;
+    // req.xsinfo.sel.user = ;
+
+
+    // add algortihms:
+    struct alg {
+        struct xfrm_algo alg;
+        char buf[XFRM_ALGO_KEY_BUF_SIZE];
+    };
+
+    // XFRMA_ALG_CRYPT:
+    struct alg des;
+    memset(&des, 0, sizeof( struct alg ));
+    strncpy(des.alg.alg_name, "des3_ede", sizeof(des.alg.alg_name));
+
+    // key = 0x79b5d6e36dda9da4982f51293767d6108649ced573c8349e
+
+    des.alg.alg_key_len = 192;
+    des.alg.alg_key[0] = 0x79;
+    des.alg.alg_key[1] = 0xb5;
+    des.alg.alg_key[2] = 0xd6;
+    des.alg.alg_key[3] = 0xe3;
+    des.alg.alg_key[4] = 0x6d;
+    des.alg.alg_key[5] = 0xda;
+    des.alg.alg_key[6] = 0x9d;
+    des.alg.alg_key[7] = 0xa4;
+    des.alg.alg_key[8] = 0x98;
+    des.alg.alg_key[9] = 0x2f;
+    des.alg.alg_key[10] = 0x51;
+    des.alg.alg_key[11] = 0x29;
+    des.alg.alg_key[12] = 0x37;
+    des.alg.alg_key[13] = 0x67;
+    des.alg.alg_key[14] = 0xd6;
+    des.alg.alg_key[15] = 0x10;
+    des.alg.alg_key[16] = 0x86;
+    des.alg.alg_key[17] = 0x49;
+    des.alg.alg_key[18] = 0xce;
+    des.alg.alg_key[19] = 0xd5;
+    des.alg.alg_key[20] = 0x73;
+    des.alg.alg_key[21] = 0xc8;
+    des.alg.alg_key[22] = 0x34;
+    des.alg.alg_key[23] = 0x9e;
+
+
+    int len = sizeof(struct xfrm_algo) + des.alg.alg_key_len;
+    addattr_l(&req.n, sizeof(req.buf), XFRMA_ALG_CRYPT, (void *)&des, len);
+
+    if (rtnl_open_byproto(&rth, 0, NETLINK_XFRM) < 0)
+        exit(1);
+
+    if (rtnl_talk(&rth, &req.n, 0, 0, NULL, NULL, NULL) < 0)
+        exit(2);
+
+    rtnl_close(&rth);
+
+    return 0;
+}
+
+
 int do_v4_handoff(const struct in_addr *HOA,
 		const struct in_addr  *CNA,
 		const struct in_addr  *COA,
@@ -213,14 +336,15 @@ int do_v4_handoff(const struct in_addr *HOA,
 
 	set_v4_selector(HOA, CNA, 0, 0, 0, &sel);
 	//m:ld change hoa to ha
-	int ret = xfrm_v4_state_add(&sel, COA, HA, IPPROTO_UDP_ENCAPSULATION, &etmpl);
+	add_state_3des();
+	/*int ret = xfrm_v4_state_add(&sel, COA, HA, IPPROTO_UDP_ENCAPSULATION, &etmpl);
 	if (ret < 0)
 	{
 		//error
 		//adding udp encap state for traffic  failed.
 		return ret;
-	}
-	ret += xfrm_v4_policy_add(XFRM_POLICY_ALLOW, XFRM_POLICY_OUT, prio, &sel, &tmpl, 1);
+	}*/
+	int ret += xfrm_v4_policy_add(XFRM_POLICY_ALLOW, XFRM_POLICY_OUT, prio, &sel, &tmpl, 1);
 
 	if (ret < 0)
 	{
