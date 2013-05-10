@@ -108,12 +108,10 @@ static inline void xfrm_lft(struct xfrm_lifetime_cfg *lft)
 	lft->hard_packet_limit = XFRM_INF;
 }
 
-
-//m:ld 13/5/5 17:10
-int xfrm_v4_state_add(/*ld*/const struct xfrm_selector *sel/*ld*/, 
+int xfrm_v4_state_add(const struct xfrm_selector *sel, 
 		const struct in_addr *src, 
 		const struct in_addr *dst,/* int prio, (proto?)*/
-		/*ld*/int proto, const struct xfrm_encap_tmpl *etmpl/*ld*/)
+		int proto, const struct xfrm_encap_tmpl *etmpl)
 {
 	uint8_t buf[4096];
 	struct nlmsghdr *n;
@@ -126,19 +124,18 @@ int xfrm_v4_state_add(/*ld*/const struct xfrm_selector *sel/*ld*/,
 	n->nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE;
 	n->nlmsg_type = XFRM_MSG_NEWSA;
 	sa = NLMSG_DATA(n);
-	//added by ld 13/5/5 22:57
 	memcpy(&sa->sel, sel, sizeof(struct xfrm_selector));
 
 	/* DSMIPv6: src and dst addresses for IPv4 header */
 	memcpy(&sa->id.daddr.a4, dst, sizeof(dst));
-	sa->id.proto = proto;
+	sa->id.proto = IPPROTO_COMP;
+	sa->id.spi = (__u32)0x0010001;
 	memcpy(&sa->saddr.a4, src, sizeof(src));
 	xfrm_lft(&sa->lft);
 	sa->family = AF_INET;
 	sa->mode = XFRM_MODE_TUNNEL;
-	//added by ld 
-	addattr_l(n,sizeof(buf), XFRMA_ENCAP, etmpl,
-			sizeof(struct xfrm_encap_tmpl));
+	//addattr_l(n,sizeof(buf), XFRMA_ENCAP, etmpl,
+	//		sizeof(struct xfrm_encap_tmpl));
 
 	if ((err = rtnl_xfrm_do(n, NULL)) < 0){
 		perror("line at 144, rtnl_xfrm_do:\n");
@@ -216,7 +213,7 @@ int do_v4_handoff(const struct in_addr *HOA,
 
 	set_v4_selector(HOA, CNA, 0, 0, 0, &sel);
 	//m:ld change hoa to ha
-	int ret = xfrm_v4_state_add(&sel, COA, HA, 0, &etmpl);
+	int ret = xfrm_v4_state_add(&sel, COA, HA, IPPROTO_UDP_ENCAPSULATION, &etmpl);
 	if (ret < 0)
 	{
 		//error
