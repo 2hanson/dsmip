@@ -67,12 +67,10 @@ static void _create_v4_tmpl(const struct in_addr *src,
 {
 	memset(utmpl, 0, sizeof(*utmpl));
 	utmpl->family = AF_INET;
-	utmpl->mode = mode; // 0 for transport, 1 for tunnel
-	utmpl->reqid = 0xAF018; // some __u32 value
-	//m: ld 13/5/5 13:44
 	utmpl->id.proto = IPPROTO_UDP_ENCAPSULATION; // IPPROTO_ESP, IPPROTO_AH, IPPROTO_COMP
+	utmpl->mode = mode; // 0 for transport, 1 for tunnel
 	utmpl->optional = 1; // option 'level' of ip utility, 0 for 'required', 1 for 'use'
-	utmpl->id.spi = (__u32) 0x118; // some __u32 number
+	utmpl->reqid = 0; // some __u32 value
 
 	if (dst->s_addr != INADDR_ANY)
 		memcpy(&utmpl->id.daddr, dst, sizeof(struct in_addr));
@@ -84,7 +82,7 @@ static void _create_v4_tmpl(const struct in_addr *src,
 	utmpl->ealgos = (~(__u32)0);
 	utmpl->calgos = (~(__u32)0);
 
-	//added by ld
+    //for the state
 	memset(etmpl, 0, sizeof(*etmpl));
 	etmpl->encap_type = UDP_ENCAP_IP_VANILLA;
 	etmpl->encap_sport = htons(DSMIP_UDP_DPORT);
@@ -323,29 +321,27 @@ int do_v4_handoff(const struct in_addr *HOA,
 		int dport,
 		int prio)
 {
-	struct xfrm_user_tmpl tmpl;
 	struct xfrm_selector sel;
-	//added by ld 13/5/5 20:41
+	struct xfrm_user_tmpl tmpl;
 	struct xfrm_encap_tmpl etmpl;
 
 	create_v4_tmpl(COA, HA, &tmpl, &etmpl);
-	//added by ld 13/5/5 20:50
-	etmpl.encap_sport = htons(sport);
+	
+    etmpl.encap_sport = htons(sport);
 	etmpl.encap_dport = htons(dport);
 	etmpl.encap_oa.a4=HA->s_addr;//destination address
 
 	set_v4_selector(HOA, CNA, 0, 0, 0, &sel);
-	//m:ld change hoa to ha
-	add_state_3des();
-	/*int ret = xfrm_v4_state_add(&sel, COA, HA, IPPROTO_UDP_ENCAPSULATION, &etmpl);
+	//add_state_3des();
+	int ret = xfrm_v4_state_add(&sel, COA, HA, IPPROTO_UDP_ENCAPSULATION, &etmpl);
 	if (ret < 0)
 	{
 		//error
 		//adding udp encap state for traffic  failed.
 		return ret;
-	}*/
-	int ret += xfrm_v4_policy_add(XFRM_POLICY_ALLOW, XFRM_POLICY_OUT, prio, &sel, &tmpl, 1);
-
+	}
+	
+    ret += xfrm_v4_policy_add(XFRM_POLICY_ALLOW, XFRM_POLICY_OUT, prio, &sel, &tmpl, 1);
 	if (ret < 0)
 	{
 		//error
