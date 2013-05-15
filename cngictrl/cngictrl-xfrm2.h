@@ -37,6 +37,10 @@ int stop_udp_encap(const struct in6_addr * mn_addrv6,
 //-----------------------------------------------------
 
 #define _hoav6 "3ffe:501:ffff:100:221:e8ff:fefb:e658"
+#define _hoav4 "172.16.0.197" 
+#define _cnav4 "172.16.0.198" 
+#define _coav4 "172.16.0.199" 
+#define _hav4 "172.16.0.200"
 
 #define MIPV6_MAX_TMPLS 3 /* AH, ESP, IPCOMP */
 #define DSMIP_UDP_DPORT 666

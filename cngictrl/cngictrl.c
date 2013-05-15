@@ -18,7 +18,7 @@
 
 #include "athdrv_linux.h"
 #include "cngictrl.h"
-#include "cngictrl-xfrm2.h"
+#include "cngictrl-xfrm3.h"
 #include <errno.h>
 
 #define errBmisscntDetect(args...) do { \

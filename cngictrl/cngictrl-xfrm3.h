@@ -37,6 +37,10 @@ int stop_udp_encap(const struct in6_addr * mn_addrv6,
 //-----------------------------------------------------
 
 #define _hoav6 "3ffe:501:ffff:100:221:e8ff:fefb:e658"
+#define _hoav4 "172.16.0.197" 
+#define _cnav4 "172.16.0.198" 
+#define _coav4 "172.16.0.199" 
+#define _hav4 "172.16.0.200"
 
 #define MIPV6_MAX_TMPLS 3 /* AH, ESP, IPCOMP */
 //m: ld the dport value maybe need modified
@@ -169,9 +173,12 @@ static int xfrm_policy_add(uint8_t type, const struct xfrm_selector *sel,
                 tmpls, sizeof(struct xfrm_user_tmpl) * num_tmpl);
 
     if ((err = rtnl_xfrm_do(n, NULL)) < 0)
-        xfrm_policy_dump("Failed to add policy:\n",
+	{
+		//failed to add policy
+        /*xfrm_policy_dump("Failed to add policy:\n",
                 n->nlmsg_flags, n->nlmsg_type, 
-                pol, &ptype, tmpls, num_tmpl);
+                pol, &ptype, tmpls, num_tmpl);*/
+	}
     return err;
 }
 
@@ -210,8 +217,11 @@ static int xfrm_policy_del(uint8_t type, const struct xfrm_selector *sel,
     addattr_l(n, sizeof(buf), XFRMA_POLICY_TYPE, &ptype, sizeof(ptype));
 
     if ((err = rtnl_xfrm_do(n, NULL)) < 0)
-        xfrm_policy_id_dump("Failed to del policy:\n", pol_id, &ptype);
-    return err;
+	{
+        //xfrm_policy_id_dump("Failed to del policy:\n", pol_id, &ptype);
+	}
+	
+	return err;
 }
 
 
@@ -247,7 +257,9 @@ int xfrm_state_del(int proto, const struct xfrm_selector *sel)
             sizeof(sel->saddr));
 
     if ((err = rtnl_xfrm_do(n, NULL)) < 0)
-        xfrm_state_id_dump("Failed to del state:\n", sa_id, &sel->saddr);
+	{
+    //    xfrm_state_id_dump("Failed to del state:\n", sa_id, &sel->saddr);
+	}
     return err;
 }
 
@@ -288,8 +300,8 @@ int xfrm_state_encap_add(const struct xfrm_selector *sel,
     if ((err = rtnl_xfrm_do(n, NULL)) < 0){
         perror("rtnl_xfrm_do:\n");
         XDBG("Failed (%d) to add state for UDP encapsulation\n", err);
-        xfrm_sel_dump(sel);
-        xfrm_sel4_dump(v4);
+        //xfrm_sel_dump(sel);
+        //xfrm_sel4_dump(v4);
     }
     XDBG("adding xfrm state encap succeed \n");
     return err;
