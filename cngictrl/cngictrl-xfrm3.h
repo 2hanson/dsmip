@@ -38,7 +38,7 @@ int stop_udp_encap(const struct in6_addr * mn_addrv6,
 
 #define _hoav6 "3ffe:501:ffff:100:221:e8ff:fefb:e658"
 #define _hoav4 "172.16.0.197" 
-#define _cnav4 "172.16.0.198" 
+#define _cnav4 "10.21.5.144" 
 #define _coav4 "192.168.0.2" 
 #define _hav4 "10.21.5.74"
 
@@ -413,7 +413,11 @@ int start_udp_encap(const struct in6_addr * mn_addrv6,
             traffic_sel.prefixlen_s = 0;      
         }
         else {
-            set_v4selector(inaddr_any,
+            //
+            struct in_addr  cnav4;
+            inet_pton(AF_INET,_cnav4,&cnav4);
+            
+            set_v4selector(cnav4,
                     *mn_addrv4, 
                     protolistv4[i][0], 
                     protolistv4[i][1], 0, 0, &traffic_sel);
