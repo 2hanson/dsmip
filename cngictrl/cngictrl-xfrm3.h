@@ -457,8 +457,8 @@ int do_handoff()
 
     inet_pton(AF_INET6,_hoav6,&hoav6);
     inet_pton(AF_INET,_hoav4,&hoav4);
-    inet_pton(AF_INET,_cnav4,&coav4);
-    inet_pton(AF_INET,_coav4,&cnav4);
+    inet_pton(AF_INET,_coav4,&coav4);
+    inet_pton(AF_INET,_cnav4,&cnav4);
     inet_pton(AF_INET,_hav4,&hav4);
     start_udp_encap(&hoav6, &hoav4, &coav4, &hav4, 688, 688, 1); 
 
