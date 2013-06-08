@@ -1529,7 +1529,6 @@ int mn_list_init(char *mnlist_file)
   return 0;
 }
 
-//a:yhz
 int ha_conf(char* fileName)
 {
 	FILE * fp = fopen(fileName,"r");
@@ -1594,7 +1593,6 @@ int main(int argc,char * argv[])
 {
   mn_list_init("conf/mnlist.txt");
 
-  //a:yhz
   if (ha_conf("conf/ha.conf") == -1)
   {
 		inet_pton(AF_INET6,"2001:cc0:2026:3:21e:c9ff:fe2c:6db",&hav6);
