@@ -1176,7 +1176,11 @@ handexit:           ;
 				if(strncmp(line,"flowhf", 6)==0){
 					do_handoff();
 				}
-				else{
+                else
+				if(strncmp(line,"cleanxfrm", 9)==0){
+                    stop_udp_encap();
+                }
+                else{
 					fprintf(stderr, "Command not found!\n");
 				}
 				//fprintf(stderr,"# ");
